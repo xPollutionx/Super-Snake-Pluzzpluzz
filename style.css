@@ -1,0 +1,27 @@
+body {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #121212; /* Dark background */
+    color: #FFFFFF; /* Light text */
+    font-family: Arial, sans-serif;
+  }
+  
+  #game {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  #gameCanvas {
+    background-color: #1e1e1e; /* Slightly lighter than the background */
+    border: 2px solid #4CAF50; /* Neon green border */
+  }
+  
+  #score {
+    margin-top: 10px;
+    font-size: 1.2em;
+  }
+  
