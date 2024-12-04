@@ -2,7 +2,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Canvas dimensions (doubled to 800x800)
+// Canvas dimensions
 canvas.width = 800;
 canvas.height = 800;
 
@@ -12,6 +12,8 @@ let snake = [{ x: 400, y: 400 }];
 let direction = { x: 0, y: 0 };
 let food = { x: 0, y: 0 };
 let score = 0;
+let gameInterval;
+let isGameOver = false;
 
 // Generate random food position
 function randomFoodPosition() {
@@ -38,7 +40,7 @@ function drawGame() {
 
   // Draw the food
   ctx.fillStyle = '#FF5722'; // Food color
-  ctx.fillRect(food.x, food.y, tileSize, tileSize);
+    ctx.fillRect(food.x, food.y, tileSize, tileSize);
 
   // Update the score
   document.getElementById('score').innerText = `Score: ${score}`;
@@ -46,6 +48,8 @@ function drawGame() {
 
 // Update the game state
 function updateGame() {
+  if (isGameOver) return;
+
   const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
 
   // Wrap around edges
@@ -54,8 +58,7 @@ function updateGame() {
 
   // Check for collisions with the snake body
   if (snake.some(segment => segment.x === head.x && segment.y === head.y)) {
-    alert('Game Over!');
-    resetGame();
+    endGame();
     return;
   }
 
@@ -76,10 +79,26 @@ function resetGame() {
   direction = { x: 0, y: 0 };   // No movement initially
   food = randomFoodPosition();
   score = 0;
+  isGameOver = false;
+  document.getElementById('restart-btn').style.display = 'none';
+  startGame();
+}
+
+// Handle game over
+function endGame() {
+  isGameOver = true;
+  clearInterval(gameInterval);
+  document.getElementById('restart-btn').style.display = 'block';
+}
+
+// Restart the game
+function restartGame() {
+  resetGame();
 }
 
 // Handle keyboard input for snake direction
 document.addEventListener('keydown', event => {
+  if (isGameOver) return;
   switch (event.key) {
     case 'ArrowUp':
       if (direction.y === 0) direction = { x: 0, y: -tileSize };
@@ -97,12 +116,13 @@ document.addEventListener('keydown', event => {
 });
 
 // Main game loop
-function gameLoop() {
-  updateGame();
-  drawGame();
-  setTimeout(gameLoop, 100); // Adjust speed with timeout
+function startGame() {
+  clearInterval(gameInterval);
+  gameInterval = setInterval(() => {
+    updateGame();
+    drawGame();
+  }, 200); // Adjust speed (slower at 200ms interval)
 }
 
-// Start the game
+// Start the game on load
 resetGame();
-gameLoop();
