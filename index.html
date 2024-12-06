@@ -1,25 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <style>
   body {
-    margin:0; 
-    background:#111; 
-    display:flex; 
-    justify-content:center; 
-    align-items:center; 
-    height:100vh; 
-    font-family:sans-serif; 
+    margin:0;
+    background:#111;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+    font-family:sans-serif;
     color:#fff;
+    position:relative;
   }
-
   canvas {
     background:#222;
     display:block;
+    border:2px solid #333;
   }
-
   .overlay {
     position:absolute;
     top:0;left:0;right:0;bottom:0;
@@ -28,10 +28,9 @@
     align-items:center;
     font-size:2em;
     background:rgba(0,0,0,0.7);
-    z-index:10;
     color:#fff;
+    z-index:10;
   }
-
   .hidden {
     display:none;
   }
@@ -39,101 +38,89 @@
 </head>
 <body>
 <canvas id="game" width="600" height="600"></canvas>
-
-<div id="gameOverOverlay" class="overlay hidden">Game Over - Press Space to Restart</div>
+<div id="overlay" class="overlay hidden">Game Over - Press Space to Restart</div>
 
 <script>
-// Basic configuration
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-// Initial parameters
-const gridSize = 20;              // Size of each cell on the grid
-let snake = [{x:10, y:10}];       // Initial snake body
-let snakeDir = {x:1, y:0};        // Initial snake direction
-let snakeLength = 3;              // Initial snake length
-let speed = 300;                  // Initial speed (lower = faster), game will speed up over time
+const gridSize = 20;
+let snake = [{x:10, y:10}];
+let direction = {x:1, y:0};
+let snakeLength = 3;
 let score = 0;
 
-let food = {x:15, y:10};          // Initial food position
-let enemies = [];                 // Enemies on the board
-let powerUps = [];                // Power-ups on the board
-
-const maxEnemies = 3;             // Max enemies at once
-const maxPowerUps = 2;            // Max power-ups at once
-
-// Power-up types
-// "grow" -> snake grows by a few segments
-// "shrink" -> snake shrinks a bit (but not below minimum length)
-// "speedup" -> temporarily speeds the game up
-// "slowdown" -> temporarily slows the game down
+let food = {x:15, y:10};
+let enemies = [];
+let powerUps = [];
+const maxEnemies = 3;
+const maxPowerUps = 2;
 const powerUpTypes = ["grow","shrink","speedup","slowdown"];
 
-// For game state
-let gameOver = false;
-let gameInterval = null;
-let speedModifier = 1;
+let speed = 300;            // Base speed in ms (interval between moves)
+let speedModifier = 1;      // Current speed modifier
 let speedTimer = 0;
 
-// Random integer helper
+let lastMoveTime = 0;
+let gameOver = false;
+
+// Utility
 function randInt(min, max) {
-  return Math.floor(Math.random() * (max - min)) + min;
-}
-
-// Place new food not colliding with snake, enemies, or power-ups
-function placeFood() {
-  let valid = false;
-  let newFood;
-  while(!valid) {
-    newFood = {x:randInt(0, canvas.width/gridSize), y:randInt(0, canvas.height/gridSize)};
-    if(!collidesWithSnake(newFood.x, newFood.y) && !collidesWithEnemies(newFood.x, newFood.y) && !collidesWithPowerUps(newFood.x,newFood.y)) {
-      valid = true;
-    }
-  }
-  food = newFood;
-}
-
-// Place enemies
-function spawnEnemies() {
-  while(enemies.length < maxEnemies) {
-    let e = {x:randInt(0, canvas.width/gridSize), y:randInt(0, canvas.height/gridSize)};
-    // Avoid player spawn area, snake, food, power-ups
-    if(!collidesWithSnake(e.x, e.y) && (e.x !== food.x || e.y !== food.y) && !collidesWithPowerUps(e.x,e.y)) {
-      enemies.push(e);
-    }
-  }
-}
-
-// Place power-ups
-function spawnPowerUps() {
-  while(powerUps.length < maxPowerUps) {
-    let p = {x:randInt(0, canvas.width/gridSize), y:randInt(0, canvas.height/gridSize), type:powerUpTypes[randInt(0,powerUpTypes.length)]};
-    if(!collidesWithSnake(p.x, p.y) && (p.x !== food.x || p.y !== food.y) && !collidesWithEnemies(p.x,p.y) && !collidesWithPowerUps(p.x,p.y)) {
-      powerUps.push(p);
-    }
-  }
+  return Math.floor(Math.random()*(max-min))+min;
 }
 
 function collidesWithSnake(x,y) {
-  return snake.some(seg => seg.x === x && seg.y === y);
+  return snake.some(s => s.x === x && s.y === y);
 }
 
 function collidesWithEnemies(x,y) {
-  return enemies.some(e => e.x===x && e.y===y);
+  return enemies.some(e => e.x === x && e.y === y);
 }
 
 function collidesWithPowerUps(x,y) {
-  return powerUps.some(p => p.x===x && p.y===y);
+  return powerUps.some(p => p.x === x && p.y === y);
 }
 
-// Draw everything
+function placeFood() {
+  let valid = false;
+  while(!valid) {
+    let newX = randInt(0, canvas.width/gridSize);
+    let newY = randInt(0, canvas.height/gridSize);
+    if(!collidesWithSnake(newX, newY) && !collidesWithEnemies(newX,newY) && !collidesWithPowerUps(newX,newY)) {
+      food = {x:newX,y:newY};
+      valid = true;
+    }
+  }
+}
+
+function spawnEnemies() {
+  while(enemies.length < maxEnemies) {
+    let ex = randInt(0, canvas.width/gridSize);
+    let ey = randInt(0, canvas.height/gridSize);
+    if(!collidesWithSnake(ex, ey) && (ex !== food.x || ey !== food.y) && !collidesWithPowerUps(ex,ey)) {
+      enemies.push({x:ex,y:ey});
+    }
+  }
+}
+
+function spawnPowerUps() {
+  while(powerUps.length < maxPowerUps) {
+    let px = randInt(0, canvas.width/gridSize);
+    let py = randInt(0, canvas.height/gridSize);
+    if(!collidesWithSnake(px,py) && (px !== food.x || py !== food.y) && !collidesWithEnemies(px,py) && !collidesWithPowerUps(px,py)) {
+      let type = powerUpTypes[randInt(0,powerUpTypes.length)];
+      powerUps.push({x:px, y:py, type:type});
+    }
+  }
+}
+
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  
+
   // Draw snake
   ctx.fillStyle = "#0f0";
-  for(let i=0; i<snake.length; i++) {
-    ctx.fillRect(snake[i].x*gridSize, snake[i].y*gridSize, gridSize, gridSize);
+  for(let s of snake) {
+    ctx.fillRect(s.x*gridSize, s.y*gridSize, gridSize, gridSize);
   }
 
   // Draw food
@@ -142,118 +129,131 @@ function draw() {
 
   // Draw enemies
   ctx.fillStyle = "#ff0";
-  enemies.forEach(e => {
+  for(let e of enemies) {
     ctx.fillRect(e.x*gridSize, e.y*gridSize, gridSize, gridSize);
-  });
-
-  // Draw power-ups
-  powerUps.forEach(p => {
-    switch(p.type) {
-      case "grow": ctx.fillStyle = "#0ff"; break;
-      case "shrink": ctx.fillStyle = "#f0f"; break;
-      case "speedup": ctx.fillStyle = "#f80"; break;
-      case "slowdown": ctx.fillStyle = "#08f"; break;
-    }
-    ctx.fillRect(p.x*gridSize, p.y*gridSize, gridSize, gridSize);
-  });
-
-  // Score
-  ctx.fillStyle = "#fff";
-  ctx.font = "16px sans-serif";
-  ctx.fillText(`Score: ${score}`, 10, 20);
-}
-
-// Move snake & handle logic
-function update() {
-  // Update speed (game speeds up over time unless modified by power-ups)
-  if(speedTimer > 0) {
-    speedTimer--;
-    if(speedTimer === 0) {
-      speedModifier = 1; // reset speed after effect
-    }
   }
 
-  let head = {x: snake[0].x + snakeDir.x, y: snake[0].y + snakeDir.y};
+  // Draw power-ups
+  for(let p of powerUps) {
+    switch(p.type) {
+      case "grow": ctx.fillStyle="#0ff"; break;
+      case "shrink": ctx.fillStyle="#f0f"; break;
+      case "speedup": ctx.fillStyle="#f80"; break;
+      case "slowdown": ctx.fillStyle="#08f"; break;
+    }
+    ctx.fillRect(p.x*gridSize, p.y*gridSize, gridSize, gridSize);
+  }
+
+  // Draw score
+  ctx.fillStyle="#fff";
+  ctx.font="16px sans-serif";
+  ctx.fillText(`Score: ${score}`, 10,20);
+}
+
+function moveSnake() {
+  let head = {x: snake[0].x + direction.x, y: snake[0].y + direction.y};
+
   // Wrap around
   if(head.x < 0) head.x = (canvas.width/gridSize)-1;
-  if(head.y < 0) head.y = (canvas.height/gridSize)-1;
   if(head.x >= canvas.width/gridSize) head.x = 0;
+  if(head.y < 0) head.y = (canvas.height/gridSize)-1;
   if(head.y >= canvas.height/gridSize) head.y = 0;
 
-  // Check collisions with snake body
+  // Check collision with self
   if(collidesWithSnake(head.x, head.y)) {
-    // If head collides with second segment or beyond, game over
-    gameOverScreen();
-    return;
+    // If it's the head colliding with body, game over
+    // (But we need to ensure it's not just the head overlapping with the tail that moves away)
+    if(!(head.x === snake[snake.length-1].x && head.y === snake[snake.length-1].y)) {
+      endGame();
+      return;
+    }
   }
 
   snake.unshift(head);
 
-  // Check if we got the food
+  // Check food
   if(head.x === food.x && head.y === food.y) {
     score++;
     snakeLength++;
     placeFood();
-    // Increase game speed slightly over time
+    // Speed up slightly as we score
     speed = Math.max(50, speed - 5);
   }
 
-  // Check collision with enemies
+  // Check enemies
   if(collidesWithEnemies(head.x, head.y)) {
-    gameOverScreen();
+    endGame();
     return;
   }
 
-  // Check collision with power-ups
-  let hitPowerUpIndex = powerUps.findIndex(p => p.x===head.x && p.y===head.y);
-  if(hitPowerUpIndex >= 0) {
-    let pu = powerUps[hitPowerUpIndex];
+  // Check power-ups
+  let puIndex = powerUps.findIndex(p => p.x === head.x && p.y === head.y);
+  if(puIndex >= 0) {
+    let pu = powerUps[puIndex];
     switch(pu.type) {
       case "grow":
-        snakeLength += 2;
+        snakeLength+=2;
         break;
       case "shrink":
-        snakeLength = Math.max(3, snakeLength - 2);
-        // If snake is currently longer than new snakeLength, trim immediately
+        snakeLength = Math.max(3, snakeLength-2);
         while(snake.length > snakeLength) {
           snake.pop();
         }
         break;
       case "speedup":
-        speedModifier = 0.5; // faster
-        speedTimer = 100;    // effect duration
+        speedModifier = 0.5;
+        speedTimer = 200;
         break;
       case "slowdown":
-        speedModifier = 2;   // slower
-        speedTimer = 100;
+        speedModifier = 2;
+        speedTimer = 200;
         break;
     }
-    powerUps.splice(hitPowerUpIndex,1);
+    powerUps.splice(puIndex,1);
     spawnPowerUps();
   }
 
-  // Trim snake to snakeLength
+  // Trim snake
   while(snake.length > snakeLength) {
     snake.pop();
   }
 
-  draw();
+  // Update speed timer if active
+  if(speedTimer > 0) {
+    speedTimer--;
+    if(speedTimer === 0) {
+      speedModifier = 1;
+    }
+  }
 }
 
-// Show game over
-function gameOverScreen() {
+function endGame() {
   gameOver = true;
-  clearInterval(gameInterval);
-  document.getElementById('gameOverOverlay').classList.remove('hidden');
+  document.getElementById('overlay').classList.remove('hidden');
 }
 
-// Key controls
+function gameLoop(timestamp) {
+  if(gameOver) {
+    draw();
+    return;
+  }
+
+  const moveInterval = speed * speedModifier; 
+  if(timestamp - lastMoveTime > moveInterval) {
+    moveSnake();
+    lastMoveTime = timestamp;
+  }
+
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
 document.addEventListener('keydown', (e)=>{
   if(!gameOver) {
-    if(e.key === "ArrowUp" && snakeDir.y===0) {snakeDir = {x:0,y:-1};}
-    else if(e.key === "ArrowDown" && snakeDir.y===0) {snakeDir = {x:0,y:1};}
-    else if(e.key === "ArrowLeft" && snakeDir.x===0) {snakeDir = {x:-1,y:0};}
-    else if(e.key === "ArrowRight" && snakeDir.x===0) {snakeDir = {x:1,y:0};}
+    if(e.key === "ArrowUp" && direction.y ===0) { direction = {x:0,y:-1}; }
+    else if(e.key === "ArrowDown" && direction.y===0) { direction = {x:0,y:1}; }
+    else if(e.key === "ArrowLeft" && direction.x===0) { direction = {x:-1,y:0}; }
+    else if(e.key === "ArrowRight" && direction.x===0) { direction = {x:1,y:0}; }
   } else {
     if(e.code === "Space") {
       restart();
@@ -263,12 +263,11 @@ document.addEventListener('keydown', (e)=>{
 
 function restart() {
   gameOver = false;
-  document.getElementById('gameOverOverlay').classList.add('hidden');
   snake = [{x:10,y:10}];
+  direction = {x:1,y:0};
   snakeLength = 3;
-  snakeDir = {x:1,y:0};
-  speed = 300;
   score = 0;
+  speed = 300;
   speedModifier = 1;
   speedTimer = 0;
   food = {x:15,y:10};
@@ -277,30 +276,16 @@ function restart() {
   placeFood();
   spawnEnemies();
   spawnPowerUps();
-  startGame();
+  document.getElementById('overlay').classList.add('hidden');
+  lastMoveTime = 0;
+  requestAnimationFrame(gameLoop);
 }
 
-function gameLoop() {
-  update();
-}
-
-function startGame() {
-  gameInterval = setInterval(gameLoop, speed * speedModifier);
-  // Because speedModifier can change, we need to adjust interval dynamically:
-  setTimeout(function tick() {
-    if(!gameOver) {
-      clearInterval(gameInterval);
-      gameInterval = setInterval(gameLoop, speed * speedModifier);
-      setTimeout(tick,100);
-    }
-  },100);
-}
-
-// Initial placements
+// Initialize
 placeFood();
 spawnEnemies();
 spawnPowerUps();
-startGame();
+requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
